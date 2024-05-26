@@ -56,6 +56,11 @@ const recipeSchema = new Schema(
       type: [{ type: String }],
       default: [],
     },
+    watchCount: {
+      require: false,
+      type: Number,
+      default: 0,
+    },
   }
 );
 
