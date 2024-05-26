@@ -5,6 +5,7 @@ import { config } from "dotenv";
 import User from "./models/User.model.js";
 import mongoose from "mongoose";
 import Stripe from "stripe";
+import Recipe from "./models/Recipe.model.js";
 
 config({
   path: ".env.local",
@@ -169,6 +170,20 @@ app.post("/purchase-update", verifyToken, verifyUser, async (req, res) => {
     return res.status(200).send(user[0]);
   } catch (err) {
     return res.status(500).send(err.message);
+  }
+});
+
+app.post("/recipes", async (req, res) => {
+  try {
+    const recipe = new Recipe(req.body);
+    const result = await recipe.save();
+    return res.status(201).send(result);
+  } catch (err) {
+    if (err.name === "ValidationError") {
+      return res.status(400).send(err.message);
+    } else {
+      return res.status(500).send("Something went wrong");
+    }
   }
 });
 
