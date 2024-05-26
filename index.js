@@ -4,12 +4,16 @@ import jwt from "jsonwebtoken";
 import { config } from "dotenv";
 import User from "./models/User.model.js";
 import mongoose from "mongoose";
+import Stripe from "stripe";
 
 config({
   path: ".env.local",
 });
 
 const app = express();
+
+// eslint-disable-next-line no-undef
+const stripe = new Stripe(process.env.apiKey_stripe);
 
 // eslint-disable-next-line no-undef
 const port = process.env.port || 3000;
@@ -42,6 +46,27 @@ const generateRefreshToken = (user) => {
     expiresIn: refreshTokenExpiry,
   });
 };
+
+app.get("/", async (req, res) => {
+  return res.send("Recipe Vault server is Running");
+});
+
+app.post("/create-payment-intent", async (req, res) => {
+  try {
+    const { price } = req.body;
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: price * 100,
+      currency: "usd",
+      payment_method_types: ["card"],
+    });
+
+    res.status(200).send({ clientSecret: paymentIntent.client_secret });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ error: "Failed to create payment intent" });
+  }
+});
 
 app.post("/jwt", async (req, res) => {
   const { email } = req.body;
@@ -86,15 +111,22 @@ const verifyToken = (req, res, next) => {
     return res.status(401).send({ message: "forbidden access" });
   }
   const token = req.headers.authorization.split(" ")[1];
-  // eslint-disable-next-line no-undef
   jwt.verify(token, SECRET_KEY, (err, decoded) => {
     if (err) {
       return res.status(401).send({ message: "unauthorized access" });
     }
     req.decoded = decoded;
-    console.log(decoded)
     next();
   });
+};
+
+const verifyUser = async (req, res, next) => {
+  const decoded_email = req.decoded.email;
+  const email = req?.body?.email || req?.query?.email;
+  if (decoded_email !== email) {
+    return res.status(403).send({ message: "forbidden access" });
+  }
+  next();
 };
 
 app.get("/users", verifyToken, async (req, res) => {
@@ -109,10 +141,6 @@ app.get("/users", verifyToken, async (req, res) => {
   }
 });
 
-app.get("/", async (req, res) => {
-  return res.send("Recipe Vault server is Running");
-});
-
 app.post("/users", async (req, res) => {
   try {
     const user = new User(req.body);
@@ -125,6 +153,22 @@ app.post("/users", async (req, res) => {
         .send(await User.findOne({ email: req.body.email }));
     }
     return res.status(err.code).send(err.message);
+  }
+});
+
+app.post("/purchase-update", verifyToken, verifyUser, async (req, res) => {
+  try {
+    const user = await User.find({ email: req.decoded.email });
+    if (!user[0]) {
+      return res.status(401).send("forbidden access");
+    }
+
+    user[0].coin += req.body.payment_amount * 100;
+    user[0].save({ validateBeforeSave: false });
+
+    return res.status(200).send(user[0]);
+  } catch (err) {
+    return res.status(500).send(err.message);
   }
 });
 
