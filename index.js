@@ -173,17 +173,96 @@ app.post("/purchase-update", verifyToken, verifyUser, async (req, res) => {
   }
 });
 
-app.post("/recipes", verifyToken, verifyUser, async (req, res) => {
+app.get("/recipes", async (req, res) => {
   try {
-    const recipe = new Recipe(req.body);
-    const result = await recipe.save();
-    return res.status(201).send(result);
+    const results = await Recipe.find(req.query).populate(
+      "author",
+      "displayName photoURL email"
+    );
+    return res.send(results);
   } catch (err) {
     if (err.name === "ValidationError") {
       return res.status(400).send(err.message);
     } else {
       return res.status(500).send("Something went wrong");
     }
+  }
+});
+
+app.get("/all-recipes", async (req, res) => {
+  try {
+    const { limit, offset, search, country, category } = req.query;
+
+    const query = {};
+
+    if (search) {
+      query.name = { $regex: search, $options: "i" };
+    }
+
+    if (category) {
+      query.category = category;
+    }
+
+    if (country) {
+      query.country = country;
+    }
+
+    const results = await Recipe.find(query, {
+      name: 1,
+      image: 1,
+      country: 1,
+      purchasedBy: 1,
+      cookTime: 1,
+    })
+      .skip(offset)
+      .limit(limit)
+      .populate("author", "displayName photoURL email");
+    return res.send({
+      recipes: results,
+      recipesCount: await Recipe.countDocuments(query),
+    });
+  } catch (err) {
+    if (err.name === "ValidationError") {
+      return res.status(400).send(err.message);
+    } else {
+      return res.status(500).send("Something went wrong");
+    }
+  }
+});
+
+app.post("/buy-recipe", verifyToken, verifyUser, async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const { user_id, recipe_id, author_id } = req.body;
+
+    const [user] = await User.find({ _id: user_id });
+    const [recipe] = await Recipe.find({ _id: recipe_id });
+    const [author] = await User.find({ _id: author_id });
+
+    user.coin -= 10;
+    author.coin += 1;
+
+    recipe.purchasedBy.push(user.email);
+    recipe.watchCount += 1;
+
+    user.save({ validateBeforeSave: false });
+    author.save({ validateBeforeSave: false });
+    recipe.save({ validateBeforeSave: false });
+
+    await session.commitTransaction();
+
+    return res.status(200).send("success");
+  } catch (err) {
+    await session.abortTransaction();
+    if (err.name === "ValidationError") {
+      return res.status(400).send(err.message);
+    } else {
+      return res.status(500).send("Something went wrong");
+    }
+  } finally {
+    // End the session
+    session.endSession();
   }
 });
 
