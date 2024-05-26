@@ -173,7 +173,7 @@ app.post("/purchase-update", verifyToken, verifyUser, async (req, res) => {
   }
 });
 
-app.post("/recipes", async (req, res) => {
+app.post("/recipes", verifyToken, verifyUser, async (req, res) => {
   try {
     const recipe = new Recipe(req.body);
     const result = await recipe.save();
