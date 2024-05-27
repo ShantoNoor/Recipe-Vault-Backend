@@ -275,6 +275,32 @@ app.post("/buy-recipe", verifyToken, verifyUser, async (req, res) => {
   }
 });
 
+app.post("/like", verifyToken, verifyUser, async (req, res) => {
+  const { user_id, recipe_id } = req.body;
+
+  try {
+    const [user] = await User.find({ _id: user_id });
+    const [recipe] = await Recipe.find({ _id: recipe_id });
+
+    if (recipe.likes.includes(user.email)) {
+      // remove user.email form array
+      recipe.likes.remove(user.email);
+    } else {
+      recipe.likes.push(user.email);
+    }
+
+    recipe.save({ validateBeforeSave: false });
+
+    return res.status(200).send("success");
+  } catch (err) {
+    if (err.name === "ValidationError") {
+      return res.status(400).send(err.message);
+    } else {
+      return res.status(500).send("Something went wrong");
+    }
+  }
+});
+
 app.listen(port, () => {
   console.log(`Recipe Vault server is listening on port ${port}`);
 });
