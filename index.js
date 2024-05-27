@@ -173,13 +173,22 @@ app.post("/purchase-update", verifyToken, verifyUser, async (req, res) => {
   }
 });
 
-app.get("/recipes", async (req, res) => {
+app.post("/recipes/:_id", verifyToken, verifyUser, async (req, res) => {
+  const { _id } = req.params;
   try {
-    const results = await Recipe.find(req.query).populate(
+    const [recipe] = await Recipe.find({ _id }).populate(
       "author",
       "displayName photoURL email"
     );
-    return res.send(results);
+
+    if (
+      req.body.email === recipe.author.email ||
+      recipe.purchasedBy.includes(req.body.email)
+    ) {
+      return res.send(recipe);
+    }
+
+    return res.status(403).send({ message: "forbidden access" });
   } catch (err) {
     if (err.name === "ValidationError") {
       return res.status(400).send(err.message);
