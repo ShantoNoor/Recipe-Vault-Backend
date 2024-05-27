@@ -301,6 +301,24 @@ app.post("/like", verifyToken, verifyUser, async (req, res) => {
   }
 });
 
+app.get("/home", async (req, res) => {
+  try {
+    const userCount = await User.countDocuments({});
+    const recipeCount = await Recipe.countDocuments({});
+
+    return res.status(200).send({
+      userCount,
+      recipeCount,
+    });
+  } catch (err) {
+    if (err.name === "ValidationError") {
+      return res.status(400).send(err.message);
+    } else {
+      return res.status(500).send("Something went wrong");
+    }
+  }
+});
+
 app.listen(port, () => {
   console.log(`Recipe Vault server is listening on port ${port}`);
 });
